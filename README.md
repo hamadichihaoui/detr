@@ -40,7 +40,7 @@ python train_airplanes.py
 ```
 python predict_airplanes.py
 ```
-##Results
+## Results
 
 ![](images/img0.jpg) | ![](images/img1.jpg) 
 :-------------------------:|:-------------------------:|
