@@ -12,11 +12,7 @@ tion-with-transformers) by Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Ni
 # Usage - Object detection
 There are no extra compiled components in DETR and package dependencies are minimal,
 so the code is very simple to use. We provide instructions how to install dependencies via conda.
-First, clone the repository locally:
-```
-git clone https://github.com/facebookresearch/detr.git
-```
-Then, install PyTorch 1.5+ and torchvision 0.6+:
+First, clone the repository locally, Then, install PyTorch 1.5+ and torchvision 0.6+:
 ```
 conda install -c pytorch pytorch torchvision
 ```
