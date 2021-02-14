@@ -38,8 +38,8 @@ python predict_airplanes.py
 ```
 ## Results
 
-![](images/img0.jpg) | ![](images/img1.jpg) 
-:-------------------------:|:-------------------------:|
+![](images/img2.jpg) | ![](images/img0.jpg) | ![](images/img1.jpg) 
+:-------------------------:|:-------------------------:|:-------------------------:|
 # License
 DETR is released under the Apache 2.0 license. Please see the [LICENSE](LICENSE) file for more information.
 
