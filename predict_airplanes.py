@@ -60,12 +60,12 @@ model.load_state_dict(torch.load('detr_best_0.pth'))
 model = model.cuda()
 model.eval()
 imgs = os.listdir(
-    '/home/hamadic/Kag/global_wheat_detection/yolov5/valid/images/')  # /home/hamadic/Kag/global_wheat_detection/airplane_images/
+    '/home/hamadic/valid/images/')  # /home/hamadic/Kag/global_wheat_detection/airplane_images/
 import random
 
 img_path = 'P1397__1__0___2442.png'  # random.choice(imgs)
 
-img = cv2.imread('/home/hamadic/Kag/global_wheat_detection/yolov5/valid/images/' + img_path)
+img = cv2.imread('/home/hamadic/valid/images/' + img_path)
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32)
 h1, w1, _ = img.shape
 img1 = cv2.resize(img, (1024, 1024)).copy()

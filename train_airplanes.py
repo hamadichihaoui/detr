@@ -407,12 +407,12 @@ def collate_fn(batch):
 
 def run(fold):
     train_dataset = WheatDataset(
-        '/home/hamadic/Kag/global_wheat_detection/yolov5/train_without_synthetic/',
+        '/home/hamadic/train_without_synthetic/',
         transforms=get_train_transforms()
     )
 
     valid_dataset = WheatDataset(
-        '/home/hamadic/Kag/global_wheat_detection/yolov5/valid_without_synthetic/',
+        '/home/hamadic/valid_without_synthetic/',
         transforms=get_valid_transforms()
     )
 
