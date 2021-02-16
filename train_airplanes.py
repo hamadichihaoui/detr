@@ -62,7 +62,7 @@ num_queries = 100
 null_class_coef = 0.5
 BATCH_SIZE = 8
 LR = 2e-5
-EPOCHS = 2
+EPOCHS = 150
 
 
 def seed_everything(seed):
@@ -80,30 +80,30 @@ seed_everything(seed)
 
 def get_train_transforms():
     return A.Compose(
-        [A.OneOf([A.HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit=0.2, val_shift_limit=0.2, p=0.9),
+        [  # A.OneOf(#[A.HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit= 0.2, val_shift_limit=0.2, p=0.9),
 
-                  A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.9)], p=0.9),
+            # A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.9)],p=0.9),
 
-         A.ToGray(p=0.01),
+            # A.ToGray(p=0.01),
 
-         A.HorizontalFlip(p=0.5),
+            # A.HorizontalFlip(p=0.5),
 
-         A.VerticalFlip(p=0.5),
+            # A.VerticalFlip(p=0.5),
 
-         A.Resize(height=512, width=512, p=1),
+            A.Resize(height=1024, width=1024, p=1),
 
-         A.Cutout(num_holes=8, max_h_size=64, max_w_size=64, fill_value=0, p=0.5),
+            # A.Cutout(num_holes=8, max_h_size=64, max_w_size=64, fill_value=0, p=0.5),
 
-         ToTensorV2(p=1.0)],
+            ToTensorV2(p=1.0)],
 
         p=1.0,
 
         bbox_params=A.BboxParams(format='coco', min_area=0, min_visibility=0, label_fields=['labels'])
-        )
+    )
 
 
 def get_valid_transforms():
-    return A.Compose([A.Resize(height=512, width=512, p=1.0),
+    return A.Compose([A.Resize(height=1024, width=1024, p=1.0),
                       ToTensorV2(p=1.0)],
                      p=1.0,
                      bbox_params=A.BboxParams(format='coco', min_area=0, min_visibility=0, label_fields=['labels'])
@@ -129,8 +129,8 @@ class WheatDataset(Dataset):
             boxes = []
             for d in data:
                 splits = d.split(' ')
-                box = [max(0., float(splits[1]) - float(splits[3]) / 2),
-                       max(0., float(splits[2]) - float(splits[4]) / 2), float(splits[3]), float(splits[4])]
+                # box= [max(0.,float(splits[1])-float(splits[3])/2), max(0., float(splits[2])-float(splits[4])/2), float(splits[3]), float(splits[4])]
+                box = [float(splits[1]), float(splits[2]), float(splits[3]), float(splits[4])]
                 boxes.append(box)
         return np.array(boxes)
 
@@ -146,15 +146,17 @@ class WheatDataset(Dataset):
 
         # DETR takes in data in coco format
 
-        boxes = self.get_boxes(image_name) * np.array([w, h, w * 0.99, h * 0.99])
+        boxes = self.get_boxes(image_name)  # * np.array([w,h,w*0.99,h*0.99])
+        # boxes = boxes.clip(0,1)
 
         # Area of bb
-        area = boxes[:, 2] * boxes[:, 3]
+        area = boxes[:, 2] * boxes[:, 3]  # *w*h
         area = torch.as_tensor(area, dtype=torch.float32)
 
         # AS pointed out by PRVI It works better if the main class is labelled as zero
         labels = np.zeros(len(boxes), dtype=np.int32)
 
+        # print('ggggg', boxes)
         if self.transforms:
             sample = {
                 'image': image,
@@ -167,9 +169,12 @@ class WheatDataset(Dataset):
             labels = sample['labels']
 
         # Normalizing BBOXES
-
+        # print('boxes', boxes)
         _, h, w = image.shape
-        boxes = A.augmentations.bbox_utils.normalize_bboxes(sample['bboxes'], rows=h, cols=w)
+
+        # print('hhhhhh', boxes)
+        # boxes = A.augmentations.bbox_utils.normalize_bboxes(sample['bboxes'],rows=h,cols=w)
+        # print('boxes', boxes)
         target = {}
         target['boxes'] = torch.as_tensor(boxes, dtype=torch.float32)
         target['labels'] = torch.as_tensor(labels, dtype=torch.long)
@@ -204,6 +209,10 @@ matcher = HungarianMatcher()
 weight_dict = weight_dict = {'loss_ce': 1, 'loss_bbox': 1, 'loss_giou': 1}
 
 losses = ['labels', 'boxes', 'cardinality']
+device = torch.device('cuda')
+model = DETRModel(num_classes=num_classes, num_queries=num_queries)
+model.load_state_dict(torch.load('detr_best_0.pth'))
+model = model.to(device)
 
 
 def iou(bboxes_preds, bboxes_targets):
@@ -248,9 +257,11 @@ def average_precision(bbox_preds, conf_preds, bbox_targets):
                 else:
                     fp += 1
             fn = torch.sum((matched_targets == 0)).item()
+
             precision += tp / (tp + fp + fn)
             rec += tp / (tp + fn)
             pr += tp / (tp + fp)
+            print('tp', tp, 'fp', fp, 'fn', fn)
         precision /= len(thresholds)
         rec /= len(thresholds)
         pr /= len(thresholds)
@@ -265,30 +276,33 @@ def calculate_map(dets, scores, targets, batch_size, device):
     for i in range(batch_size):
         try:
             boxes = dets[i][:, :4]
-            print('boxes', boxes)
-            print('scores', scores)
+            # print('boxes', boxes)
+            # print('scores', scores)
         except:
             print('dets[i]', dets[i])
         # scores = dets[i][:,4]
         # indexes = torch.where(scores > score_threshold)[0]
         # boxes = boxes[indexes]
         # scores = scores[indexes]
-        target_boxes = targets[i]['boxes']
+        target_boxes = targets[i]  # ['boxes']
         # target_boxes[:,[0,1,2,3]] = target_boxes[:,[1,0,3,2]]
         # boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
         # boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
-        av_pre, rec, pr = average_precision(boxes, scores, target_boxes.to(device))
+        av_pre, rec, pr = average_precision(boxes, scores[i], target_boxes.to(device))
         sc_precision = sc_precision + av_pre
         sc_rec = sc_rec + rec
         sc_pr = sc_pr + pr
     return sc_precision, sc_rec, sc_pr
 
 
-def train_fn(data_loader, model, criterion, optimizer, device, scheduler, epoch):
+def train_fn(data_loader, criterion, optimizer, device, scheduler, epoch):
     model.train()
     criterion.train()
 
     summary_loss = AverageMeter()
+    summary_loss_ce = AverageMeter()
+    summary_loss_bbox = AverageMeter()
+    summary_loss_giou = AverageMeter()
 
     tk0 = tqdm(data_loader, total=len(data_loader))
 
@@ -296,28 +310,34 @@ def train_fn(data_loader, model, criterion, optimizer, device, scheduler, epoch)
 
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        optimizer.zero_grad()
 
         output = model(images)
+        # print('targets', targets[0]['boxes'])
+        # print('output', output['pred_boxes'])
 
         loss_dict = criterion(output, targets)
         weight_dict = criterion.weight_dict
 
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
-        optimizer.zero_grad()
-
         losses.backward()
         optimizer.step()
+        summary_loss_ce.update(loss_dict['loss_ce'].item(), BATCH_SIZE)
+        summary_loss_bbox.update(loss_dict['loss_bbox'].item(), BATCH_SIZE)
+        summary_loss_giou.update(loss_dict['loss_giou'].item(), BATCH_SIZE)
+
         if scheduler is not None:
-            scheduler.step()
+            scheduler.step(losses.item())
 
         summary_loss.update(losses.item(), BATCH_SIZE)
-        tk0.set_postfix(loss=summary_loss.avg)
+        tk0.set_postfix(loss=summary_loss.avg, ce=summary_loss_ce.avg, bbox=summary_loss_bbox.avg,
+                        giou=summary_loss_giou.avg)
 
-    return summary_loss
+    return summary_loss, summary_loss_ce, summary_loss_bbox, summary_loss_giou
 
 
-def eval_fn(data_loader, model, criterion, device):
+def eval_fn(data_loader, criterion, device):
     model.eval()
     criterion.eval()
     summary_loss = AverageMeter()
@@ -332,6 +352,7 @@ def eval_fn(data_loader, model, criterion, device):
         for step, (images, targets, image_ids) in enumerate(tk0):
 
             images = list(image.to(device) for image in images)
+            targets1 = targets
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
             output = model(images)
@@ -345,12 +366,25 @@ def eval_fn(data_loader, model, criterion, device):
                 indices = torch.where(probs_i > 0.5)
                 scores = probs_i[indices]
                 filtered = detections[i][indices] * 1024
+                filtered[:, 0] = filtered[:, 0] - 0.5 * filtered[:, 2]
+                filtered[:, 1] = filtered[:, 1] - 0.5 * filtered[:, 3]
                 filtered[:, 2] = filtered[:, 2] + filtered[:, 0]
                 filtered[:, 3] = filtered[:, 3] + filtered[:, 1]
+                filtered = filtered.clamp(0, 1024)
                 final_detections.append(filtered)
                 final_scores.append(scores)
 
-            sc_precision, sc_rec, sc_pr = calculate_map(final_detections, final_scores, targets, len(images),
+            final_gt = []
+            for k in range(len(targets)):
+                gt_k = targets[k]['boxes'] * 1024
+                gt_k[:, 0] = gt_k[:, 0] - 0.5 * gt_k[:, 2]
+                gt_k[:, 1] = gt_k[:, 1] - 0.5 * gt_k[:, 3]
+                gt_k[:, 2] = gt_k[:, 2] + gt_k[:, 0]
+                gt_k[:, 3] = gt_k[:, 3] + gt_k[:, 1]
+                gt_k = gt_k.clamp(0, 1024)
+                final_gt.append(gt_k)
+
+            sc_precision, sc_rec, sc_pr = calculate_map(final_detections, final_scores, final_gt, len(images),
                                                         torch.device('cuda:0'))
             len_viewed = len_viewed + len(images)
             cumm_pr = cumm_pr + sc_pr
@@ -373,12 +407,12 @@ def collate_fn(batch):
 
 def run(fold):
     train_dataset = WheatDataset(
-        '/home/hamadic/Kag/global_wheat_detection/yolov5/train/',
+        '/home/hamadic/Kag/global_wheat_detection/yolov5/train_without_synthetic/',
         transforms=get_train_transforms()
     )
 
     valid_dataset = WheatDataset(
-        '/home/hamadic/Kag/global_wheat_detection/yolov5/valid/',
+        '/home/hamadic/Kag/global_wheat_detection/yolov5/valid_without_synthetic/',
         transforms=get_valid_transforms()
     )
 
@@ -398,21 +432,44 @@ def run(fold):
         collate_fn=collate_fn
     )
 
-    device = torch.device('cuda')
-    model = DETRModel(num_classes=num_classes, num_queries=num_queries)
-    model = model.to(device)
     criterion = SetCriterion(num_classes - 1, matcher, weight_dict, eos_coef=null_class_coef, losses=losses)
     criterion = criterion.to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
+    param_dicts = [
+        {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},
+        {
+            "params": [p for n, p in model.named_parameters() if "backbone" in n and p.requires_grad],
+            "lr": 1e-6,
+        },
+    ]
+    optimizer = torch.optim.AdamW(param_dicts, lr=LR, weight_decay=2e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
     best_loss = 10 ** 5
     for epoch in range(EPOCHS):
-        train_loss = train_fn(train_data_loader, model, criterion, optimizer, device, scheduler=None, epoch=epoch)
-        valid_loss, cumm_pr, cumm_rec = eval_fn(valid_data_loader, model, criterion, device)
+        # train_loss, train_loss_ce, train_loss_bbox, train_loss_giou = train_fn(train_data_loader,criterion, optimizer,device,scheduler=None,epoch=epoch)
+        valid_loss, cumm_pr, cumm_rec = eval_fn(valid_data_loader, criterion, device)
 
-        print('|EPOCH {}| TRAIN_LOSS {}| VALID_LOSS {}|  Prec {}|  Recall {}'.format(epoch + 1, train_loss.avg,
-                                                                                     valid_loss.avg, cumm_pr, cumm_rec))
+        train_loss, train_loss_ce, train_loss_bbox, train_loss_giou = valid_loss, valid_loss, valid_loss, valid_loss
+        print(
+            '|EPOCH {}| TRAIN_LOSS {}| CE {} | BBOX {}| GIOU {}| VALID_LOSS {}|  Prec {}|  Recall {}'.format(epoch + 1,
+                                                                                                             round(
+                                                                                                                 train_loss.avg,
+                                                                                                                 3),
+                                                                                                             round(
+                                                                                                                 train_loss_ce.avg,
+                                                                                                                 3),
+                                                                                                             round(
+                                                                                                                 train_loss_bbox.avg,
+                                                                                                                 3),
+                                                                                                             round(
+                                                                                                                 train_loss_giou.avg,
+                                                                                                                 3),
+                                                                                                             round(
+                                                                                                                 valid_loss.avg,
+                                                                                                                 3),
+                                                                                                             cumm_pr,
+                                                                                                             cumm_rec))
 
         if valid_loss.avg < best_loss:
             best_loss = valid_loss.avg
